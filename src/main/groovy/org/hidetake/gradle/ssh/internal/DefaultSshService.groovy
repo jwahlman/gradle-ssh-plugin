@@ -27,25 +27,33 @@ class DefaultSshService implements SshService {
         def jsch = jschFactory()
         jsch.config.putAll(sshSpec.config)
 
-        def sessions = [:] as Map<SessionSpec, Session>
+        Map<SessionSpec, List<Session>> sessions = [:]
         try {
             sshSpec.sessionSpecs.each { spec ->
                 retry(sshSpec.retryCount, sshSpec.retryWaitSec) {
-                    def session = jsch.getSession(spec.remote.user, spec.remote.host, spec.remote.port)
-                    if (spec.remote.password) {
-                        session.password = spec.remote.password
-                    }
-                    if (spec.remote.identity) {
-                        // TODO: below impacts on global, but should be session-specific
+                    if (spec.remote.proxyHost) {
+                        def proxySession = createSession(jsch, spec.remote.proxyHost)
+                        proxySession.connect()
 
-                        if (spec.remote.passphrase) {
-                            jsch.addIdentity(spec.remote.identity.path, spec.remote.passphrase)
-                        } else {
-                            jsch.addIdentity(spec.remote.identity.path)
+                        int assignedPort = proxySession.setPortForwardingL(0, spec.remote.host, spec.remote.port);
+                        def session = jsch.getSession(spec.remote.user, "127.0.0.1", assignedPort)
+                        if (spec.remote.password) {
+                            session.password = spec.remote.password
                         }
+                        if (spec.remote.identity) {
+                            if (spec.remote.passphrase) {
+                                jsch.addIdentity(spec.remote.identity.path, spec.remote.passphrase)
+                            } else {
+                                jsch.addIdentity(spec.remote.identity.path)
+                            }
+                        }
+                        session.connect()
+                        sessions.put(spec, [session, proxySession])
+                    } else {
+                        def session = createSession(jsch, spec.remote)
+                        session.connect()
+                        sessions.put(spec, [session])
                     }
-                    session.connect()
-                    sessions.put(spec, session)
                 }
             }
 
@@ -64,8 +72,25 @@ class DefaultSshService implements SshService {
                 lifecycleManager.disconnect()
             }
         } finally {
-            sessions.each { spec, session -> session.disconnect() }
+            sessions.each { spec, session -> session.each { it.disconnect() } }
         }
+    }
+
+    private Session createSession(def jsch, def remote) {
+        def session = jsch.getSession(remote.user, remote.host, remote.port)
+        if (remote.password) {
+            session.password = remote.password
+        }
+        if (remote.identity) {
+            // TODO: below impacts on global, but should be session-specific
+
+            if (remote.passphrase) {
+                jsch.addIdentity(remote.identity.path, remote.passphrase)
+            } else {
+                jsch.addIdentity(remote.identity.path)
+            }
+        }
+        session
     }
 
     /**

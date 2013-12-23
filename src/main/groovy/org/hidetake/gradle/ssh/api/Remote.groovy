@@ -63,6 +63,8 @@ class Remote {
         roles.add(role)
     }
 
+    Remote proxyHost
+
     /**
      * Returns a string representation of this remote host.
      */

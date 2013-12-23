@@ -20,7 +20,7 @@ import org.hidetake.gradle.ssh.api.*
 class DefaultOperationHandler extends AbstractOperationHandler {
     final SshSpec sshSpec
     final SessionSpec sessionSpec
-    final Session session
+    final List<Session> session
     final SessionLifecycleManager globalLifecycleManager
 
     @Override
@@ -34,7 +34,7 @@ class DefaultOperationHandler extends AbstractOperationHandler {
 
         def lifecycleManager = new SessionLifecycleManager()
         try {
-            def channel = session.openChannel('shell') as ChannelShell
+            def channel = session.first().openChannel('shell') as ChannelShell
             options.each { k, v -> channel[k] = v }
 
             def context = DefaultShellContext.create(channel, sshSpec.encoding)
@@ -61,7 +61,7 @@ class DefaultOperationHandler extends AbstractOperationHandler {
 
         def lifecycleManager = new SessionLifecycleManager()
         try {
-            def channel = session.openChannel('exec') as ChannelExec
+            def channel = session.first().openChannel('exec') as ChannelExec
             channel.command = command
             options.each { k, v -> channel[k] = v }
 
@@ -121,7 +121,7 @@ class DefaultOperationHandler extends AbstractOperationHandler {
     CommandContext executeBackground(Map<String, Object> options, String command) {
         log.info("Executing command in background: ${command}")
 
-        def channel = session.openChannel('exec') as ChannelExec
+        def channel = session.first().openChannel('exec') as ChannelExec
         channel.command = command
         options.each { k, v -> channel[k] = v }
 
@@ -138,7 +138,7 @@ class DefaultOperationHandler extends AbstractOperationHandler {
     @Override
     void get(Map<String, Object> options, String remote, String local) {
         log.info("Get: ${remote} -> ${local}")
-        def channel = session.openChannel('sftp') as ChannelSftp
+        def channel = session.first().openChannel('sftp') as ChannelSftp
         options.each { k, v -> channel[k] = v }
         try {
             channel.connect()
@@ -153,7 +153,7 @@ class DefaultOperationHandler extends AbstractOperationHandler {
     @Override
     void put(Map<String, Object> options, String local, String remote) {
         log.info("Put: ${local} -> ${remote}")
-        def channel = session.openChannel('sftp') as ChannelSftp
+        def channel = session.first().openChannel('sftp') as ChannelSftp
         options.each { k, v -> channel[k] = v }
         try {
             channel.connect()
